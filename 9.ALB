@@ -1,0 +1,104 @@
+# Create an Application Load Balancer
+
+
+1. Create two ec2 instance in [private app subnet AZ1 and private app subnet AZ2 ]
+# First Instance:
+EC2 > Instance > Launch an instance 
+- name[websrv-AZ1] 
+- ami [amazon-linux-2] 
+- instance type [t2.micro] 
+- keypair [new/existing] 
+- network setting [edit]:
+   - select vpc[dev-vpc]
+   - subnet [private app subnet AZ1]
+   - select SG [WebserverSG] ->
+- Storage [default] 
+- Advanced detail[userdata(type in script down below)] ->  Review and Launch [Launch]
+- IN: DONT FORGET TO CHANGE YOUR MOUNT FILE SYSTEM <THE SECOND LINE IN RED>
+
+# Second Instance:
+EC2 > Instance > Launch an instance 
+- name[websrv-AZ2] 
+- ami [amazon-linux-2] 
+- instance type [t2.micro] 
+- keypair [new/existing] 
+- network setting [edit]:
+   - select vpc[dev-vpc]
+   - subnet [private app subnet AZ2]
+   - select SG [WebserverSG] ->
+- Storage [default] 
+- Advanced detail[userdata(type in script down below)] ->  Review and Launch [Launch]
+- IN: DONT FORGET TO CHANGE YOUR MOUNT FILE SYSTEM <THE SECOND LINE IN RED>
+
+```
+#!/bin/bash
+yum update -y
+sudo yum install -y httpd httpd-tools mod_ssl
+sudo systemctl enable httpd 
+sudo systemctl start httpd
+sudo amazon-linux-extras enable php7.4
+sudo yum clean metadata
+sudo yum install php php-common php-pear -y
+sudo yum install php-{cgi,curl,mbstring,gd,mysqlnd,gettext,json,xml,fpm,intl,zip} -y
+sudo rpm -Uvh https://dev.mysql.com/get/mysql57-community-release-el7-11.noarch.rpm
+sudo rpm --import https://repo.mysql.com/RPM-GPG-KEY-mysql-2022
+sudo yum install mysql-community-server -y
+sudo systemctl enable mysqld
+sudo systemctl start mysqld
+echo "fs-03c9b3354880b36a6.efs.us-east-1.amazonaws.com:/ /var/www/html nfs4 nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2 0 0" >> /etc/fstab
+mount -a
+chown apache:apache -R /var/www/html
+sudo service httpd restart
+
+```
+
+2. Create a Target Group, and add the EC2 instances in the target group to allow the ALB to route traffic to them 
+EC2 > Load balancing > Target Groups > Create TG
+- Basic configuration: Instances
+- name : dev-TG
+- protocol: HTTP
+- vpc: dev-vpc
+  Health checks > Advanced Health checks
+  - success code : 200,301,302 -> Next
+  Register targets > available instances
+   - select [web-srvAZ1 and websrv AZ2]
+   - click [include as pending below]
+   - Create Target Group
+ 
+     
+3. Create the Application Load Balancer (ALB)
+- Load Balancers > Create LB > Create ALB 
+-  name[dev-alb] -> 
+- scheme[internet facing] -> 
+- ip address type [ipv4] ->
+ network mapping[dev-vpc] :
+   -  mapping[us-east-1a] -> subnet[publicsubnet az1] 
+   -  mapping[us-east-1b] -> subnet [public subnet az2]
+ sg[alb-sg] 
+-  listener -> default actions -> select[dev-TG] -> CREATE ALB
+
+
+SEE LB 
+- click-> view lb
+- copy dns name on your browser[see the website deploy on aws]
+- IN: should be in active before going to browser
+
+4. Changing domain name in wordpress
+   - copy domain name -> <DomainName>/wp-admin -> Enter -> Login
+   - settings > General > Update the wordpress URL and site address URL
+   -  Paste the domain name and rmove the forward slash at the end -> SAVE CHANGES
+
+  -  LOGIN AGAIN -> CONGRATS YOU CAN ACCESS YOUR APPLICATION USING AN ALB \
+
+5. DELETE THE SETUP SERVER
+- EC2 > Instance state [terminate]
+
+
+  
+
+
+
+
+ 
+
+  
